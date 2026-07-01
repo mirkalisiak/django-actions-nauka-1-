@@ -1,0 +1,103 @@
+name: CI Workflow
+
+# Uruchamia workflow po pushu oraz pull_request 
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# Anulowanie poprzednich workflow przy nowych commitach (Optymalizacja) [cite: 111]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    [cite_start]name: Linting i formatowanie [cite: 24, 33]
+    [cite_start]runs-on: ubuntu-latest [cite: 14]
+    steps:
+      - uses: actions/checkout@v4
+      - [cite_start]name: Set up Python 3.12 [cite: 15]
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          [cite_start]cache: 'pip' # Cache dla zależności pip [cite: 16]
+      - name: Install dependencies
+        run: pip install flake8 black isort
+      - [cite_start]name: Run Black [cite: 30]
+        run: black --check .
+      - [cite_start]name: Run isort [cite: 31]
+        run: isort --check-only .
+      - [cite_start]name: Run Flake8 [cite: 29]
+        run: flake8 .
+
+  security:
+    [cite_start]name: Skanowanie bezpieczeństwa [cite: 63]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install security tools
+        run: pip install bandit safety
+      - [cite_start]name: Run Bandit [cite: 66]
+        run: bandit -r .
+      - [cite_start]name: Run Safety [cite: 67]
+        [cite_start]run: safety check -r requirements.txt # Skan zależności [cite: 68]
+
+  test:
+    [cite_start]name: Testy Django (PostgreSQL & Redis) [cite: 40, 91]
+    [cite_start]runs-on: ubuntu-latest [cite: 14]
+    # Wykorzystanie services do uruchomienia baz danych [cite: 51]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          [cite_start]POSTGRES_DB: ${{ secrets.POSTGRES_DB }} # Użycie GitHub Secrets [cite: 17, 53]
+          [cite_start]POSTGRES_USER: ${{ secrets.POSTGRES_USER }} [cite: 54]
+          [cite_start]POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }} [cite: 55]
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - [cite_start]6379:6379 [cite: 101]
+
+    steps:
+      - uses: actions/checkout@v4
+      - [cite_start]name: Set up Python 3.12 [cite: 15]
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          [cite_start]cache: 'pip' [cite: 108]
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt [cite: 9]
+
+      # Przygotowanie testów z workerem Celery i testową bazą danych
+      - [cite_start]name: Run Migrations [cite: 10, 47]
+        env:
+          DB_NAME: ${{ secrets.POSTGRES_DB }}
+          DB_USER: ${{ secrets.POSTGRES_USER }}
+          DB_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DB_HOST: localhost
+        [cite_start]run: python manage.py migrate [cite: 58]
+
+      - [cite_start]name: Run Django Tests [cite: 11]
+        env:
+          DB_NAME: ${{ secrets.POSTGRES_DB }}
+          DB_USER: ${{ secrets.POSTGRES_USER }}
+          DB_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DB_HOST: localhost
+          [cite_start]CELERY_BROKER_URL: redis://localhost:6379/0 # Konfiguracja dla Celery [cite: 97, 98]
+        [cite_start]run: python manage.py test [cite: 20]
