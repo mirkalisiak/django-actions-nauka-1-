@@ -1,0 +1,37 @@
+name: Linting
+
+# Workflow uruchamia się przy każdym pushu i pull request (Zadanie 2)
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Wymagane środowisko Python 3.12 (Zadanie 1)
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          # Optymalizacja workflowów - wbudowany cache pip (Zadanie 7)
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort
+
+      # Oddzielny job lint i wykonywanie równoległe względem testów z innych plików (Zadanie 2)
+      - name: Check code formatting with Black
+        run: black --check .
+
+      - name: Check imports with isort
+        run: isort --check-only .
+
+      - name: Lint with flake8
+        run: flake8 .
